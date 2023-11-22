@@ -1,0 +1,11 @@
+{
+  "Description": "Tools to show stats for Roblox games", 
+  "Name": "Roblox Game Stats", 
+  "Category": "Roblox Game Stats", 
+  "dev.ericfalk.roblox-player-count.action": {
+    "Name": "Player Count", 
+    "Tooltip": "Displays the concurrent player count of a Roblox game"
+  },
+  "Localization": {
+  }
+}

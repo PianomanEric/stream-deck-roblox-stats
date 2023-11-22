@@ -1,0 +1,10 @@
+.DS_Store
+.idea/**
+/src/DistributionTool
+dev.ericfalk.roblox-player-count.streamDeckPlugin
+.vscode/**
+package.json
+package-lock.json
+.history
+__exclude
+.editorconfig
