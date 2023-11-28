@@ -8,10 +8,17 @@ const playerCount = new Action('dev.ericfalk.roblox-player-count.action');
 
 const activeKeys = new Map();
 
+let refreshInterval = null;
+
 function refreshKeys() {
+	console.log("Refresh Called")
+
 	if (activeKeys.size === 0) {
+		console.log("Rejected");
 		return;
 	}
+
+	console.log(activeKeys.size);
 
 	const gamesList = [];
 
@@ -127,7 +134,11 @@ function addTextToImage(base64, text) {
 
 playerCount.onWillAppear(({ action, context, device, event, payload }) => {
 	if (activeKeys.size === 0) {
-		setInterval(refreshKeys, 30000);
+		if (refreshInterval) {
+			clearInterval(refreshInterval);
+			refreshInterval = null;
+		}
+		refreshInterval = setInterval(refreshKeys, 30000);
 	}
 	updateKeyPlace(context, payload.settings.placeId).then(() => {
 		refreshKeys();
@@ -135,9 +146,17 @@ playerCount.onWillAppear(({ action, context, device, event, payload }) => {
 });
 
 playerCount.onWillDisappear(({ action, context, device, event, payload }) => {
+	console.log("Disappearing");
+	console.log(activeKeys.has(context));
 	activeKeys.delete(context);
+	console.log(activeKeys.size);
 	if (activeKeys.size === 0) {
-		clearInterval(refreshKeys);
+		console.log("Clearing");
+		if (refreshInterval) {
+			clearInterval(refreshInterval);
+			refreshInterval = null;
+		}
+		console.log("Cleared");
 	}
 });
 
