@@ -1,7 +1,7 @@
 .DS_Store
 .idea/**
 /src/DistributionTool.exe
-dev.ericfalk.roblox-player-count.streamDeckPlugin
+dev.ericfalk.roblox-stats.streamDeckPlugin
 .vscode/**
 package.json
 package-lock.json

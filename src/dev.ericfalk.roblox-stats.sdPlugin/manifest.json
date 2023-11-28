@@ -3,7 +3,7 @@
 	"Author": "Eric Falk",
 	"CodePath": "app.html",
 	"Description": "Tools to show stats for Roblox games",
-	"Name": "Roblox Game Stats",
+	"Name": "Roblox Stats",
 	"Icon": "actions/template/assets/action",
 	"URL": "https://ericfalk.dev",
 	"Version": "0.1.0",
@@ -33,7 +33,7 @@
 				}
 			],
 			"Tooltip": "Displays the concurrent player count of a Roblox game",
-			"UUID": "dev.ericfalk.roblox-player-count.action",
+			"UUID": "dev.ericfalk.roblox-stats.action",
 			"PropertyInspectorPath": "actions/template/property-inspector/inspector.html"
 		}
 	]

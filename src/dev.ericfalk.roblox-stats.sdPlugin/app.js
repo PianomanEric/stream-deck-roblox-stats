@@ -4,7 +4,7 @@
 const ICON_SIZE = 144;
 const FONT_NAME = "Bebas Neue";
 
-const playerCount = new Action('dev.ericfalk.roblox-player-count.action');
+const playerCount = new Action('dev.ericfalk.roblox-stats.action');
 
 const activeKeys = new Map();
 
