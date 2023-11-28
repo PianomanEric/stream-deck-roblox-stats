@@ -6,7 +6,7 @@
 	"Name": "Roblox Game Stats",
 	"Icon": "actions/template/assets/action",
 	"URL": "https://ericfalk.dev",
-	"Version": "1.0.2",
+	"Version": "0.1.0",
 	"Software": {
 		"MinimumVersion": "5.0"
 	},
