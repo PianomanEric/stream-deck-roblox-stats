@@ -1,3 +1,0 @@
-[submodule "src/dev.ericfalk.roblox-stats.sdPlugin/libs"]
-	path = src/dev.ericfalk.roblox-stats.sdPlugin/libs
-	url = https://github.com/elgatosf/streamdeck-javascript-sdk

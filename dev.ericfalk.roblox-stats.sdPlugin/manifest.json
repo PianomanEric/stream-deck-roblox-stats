@@ -1,0 +1,49 @@
+{
+	"Name": "Roblox Stats",
+	"Version": "0.1.0.0",
+	"Author": "Eric Falk",
+	"Actions": [
+		{
+			"Name": "Player Count",
+			"UUID": "dev.ericfalk.roblox-stats.player-count",
+			"Icon": "imgs/actions/player-count/icon",
+			"Tooltip": "Displays the player count of a Roblox game in real time",
+			"PropertyInspectorPath": "ui/player-count.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"UserTitleEnabled": false,
+			"SupportedInMultiActions": false,
+			"States": [
+				{
+					"Image": "imgs/actions/player-count/icon",
+					"TitleAlignment": "middle"
+				}
+			]
+		}
+	],
+	"Category": "Roblox Stats",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "See stats for your Roblox games in real time!",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 2,
+	"Software": {
+		"MinimumVersion": "6.5"
+	},
+	"OS": [
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		},
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Nodejs": {
+		"Version": "20",
+		"Debug": "enabled"
+	},
+	"UUID": "dev.ericfalk.roblox-stats"
+}
