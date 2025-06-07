@@ -28,6 +28,21 @@ interface UniverseDataResponse {
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let activeActions: Set<string> = new Set<string>();
 
+function shortenNumber(num: number = 0) {
+	if (num < 1000) {
+		return String(num)
+	}
+	const characters = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', '?'];
+	let group = Math.floor(Math.log10(num)/3);
+	let divisor = 1000**group/10;
+	let rounded = Math.round(num/divisor)/10
+	if (rounded == 1000) {
+		rounded /= 1000;
+		group += 1;
+	}
+	return rounded + characters[Math.min(group, characters.length-1)];
+}
+
 async function registerAction(actionId: string) {
 	activeActions.add(actionId);
 	if (activeActions.size > 0 && intervalId === null) {
@@ -78,22 +93,32 @@ async function updateActions(actions: (KeyAction | DialAction)[]) {
 		getThumbnails(sterilizedUniverses),
 		getPlayerCounts(sterilizedUniverses),
 	]).then(async ([thumbnails, counts]) => {
-		sterilizedUniverses.forEach(async (universeId) => {
-			const image = await addTextToImage(thumbnails.get(universeId) || "", counts.get(universeId) || "");
+		await Promise.all(sterilizedUniverses.map(async (universeId) => {
 			let actions = universeMap.get(universeId) || [];
-			actions.forEach((action) => {
+			let generatedImages: Map<string, string> = new Map<string, string>();
+			await Promise.all(actions.map(async (action) => {
+				const settings: CountSettings = await action.getSettings();
+				const format: string = settings.format;
+				let image = generatedImages.get(format);
+				if (!image) {
+					const num = counts.get(universeId) || 0
+					const numberString: string = (format == "full" ? num.toLocaleString() : shortenNumber(num));
+					image = await addTextToImage(thumbnails.get(universeId) || "", numberString);
+					generatedImages.set(format, image);
+				}
 				action.setImage(image);
-			});
-		});
+			}));
+		}));
 		let blankActions = universeMap.get(0);
 		if (blankActions) {
 			blankActions.forEach((action) => {
 				action.setImage("imgs/actions/player-count/icon");
 			});
 		}
-	});
-	actions.forEach((action) => {
-		updating.delete(action.id);
+	}).then(() => {
+		actions.forEach((action) => {
+			updating.delete(action.id);
+		});
 	});
 }
 
@@ -103,8 +128,8 @@ async function addTextToImage(base64: string, text: string) {
 		<svg width="144" height="144" viewBox="0 0 144 144" xmlns="http://www.w3.org/2000/svg">
 			<defs>
 				<filter id="dropShadow" x="-50%" y="-50%" width="200%" height="200%">
-					<feMorphology in="SourceAlpha" result="Thickened" operator="dilate" radius="2" />
-					<feGaussianBlur in="Thickened" stdDeviation="3" />
+					<feMorphology in="SourceAlpha" result="Thickened" operator="dilate" radius="3" />
+					<feGaussianBlur in="Thickened" stdDeviation="4" />
 					<feOffset dx="0" dy="0" result="offsetblur" />
 					<feFlood flood-color="black" flood-opacity="1" />
 					<feComposite in="offsetblur" operator="in" />
@@ -124,7 +149,7 @@ async function addTextToImage(base64: string, text: string) {
 	const buffer = Buffer.from(uri, 'base64');
 	const base = await sharp(buffer)
 	.resize(144, 144)
-	.modulate({ brightness: 0.8 })
+	.modulate({ brightness: 0.75 })
 	.blur(2)
 	.composite([{ input: svgBuffer }])
 	.png().toBuffer();
@@ -175,8 +200,8 @@ async function getThumbnails(universeIds: number[]): Promise<Map<number, string>
 	});
 }
 
-async function getPlayerCounts(universeIds: number[]): Promise<Map<number, string>> {
-	const playerCounts = new Map();
+async function getPlayerCounts(universeIds: number[]): Promise<Map<number, number>> {
+	const playerCounts: Map<number, number> = new Map<number, number>();
 	if (universeIds.length == 0) {
 		return playerCounts;
 	}
@@ -186,7 +211,7 @@ async function getPlayerCounts(universeIds: number[]): Promise<Map<number, strin
 		if (response.status === 200) {
 			let json = await response.json() as UniverseDataResponse;
 			for (let universeData of json.data) {
-				playerCounts.set(universeData.id, universeData.playing.toLocaleString());
+				playerCounts.set(parseInt(universeData.id), parseInt(universeData.playing));
 			}
 		}
 		return playerCounts;
@@ -221,5 +246,5 @@ export class PlayerCount extends SingletonAction<CountSettings> {
 
 type CountSettings = {
 	placeId?: number;
-	count?: string;
+	format: "compact" | "full";
 };
