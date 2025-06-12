@@ -1,5 +1,5 @@
 import { action, KeyAction, DialAction, DidReceiveSettingsEvent, KeyDownEvent, SingletonAction, streamDeck, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
-import sharp from "sharp";
+import { Jimp, loadFont, measureText, measureTextHeight} from "jimp";
 
 const REFRESH_INTERVAL = 30000;
 
@@ -43,7 +43,7 @@ function shortenNumber(num: number = 0) {
 	return rounded + characters[Math.min(group, characters.length-1)];
 }
 
-async function registerAction(actionId: string) {
+function registerAction(actionId: string) {
 	activeActions.add(actionId);
 	if (activeActions.size > 0 && intervalId === null) {
 		intervalId = setInterval(() => {
@@ -59,7 +59,7 @@ async function registerAction(actionId: string) {
 	}
 }
 
-async function unregisterAction(actionId: string) {
+function unregisterAction(actionId: string) {
 	activeActions.delete(actionId);
 	if (activeActions.size === 0 && intervalId !== null) {
 		clearInterval(intervalId);
@@ -67,21 +67,19 @@ async function unregisterAction(actionId: string) {
 	}
 }
 
-let updating: Set<string> = new Set<string>();
+let cachedSettings: Map<string, CountSettings> = new Map<string, CountSettings>();
+
+function getSettings(actionId: string): CountSettings {
+	return cachedSettings.get(actionId) || {
+		placeId: 0,
+		format: "compact",
+	} as CountSettings
+}
 
 async function updateActions(actions: (KeyAction | DialAction)[]) {
-	actions = actions.filter((action) => {return !updating.has(action.id)});
-	if (actions.length === 0) {
-		return;
-	}
-	actions.forEach((action) => {
-		updating.add(action.id);
-	});
-	streamDeck.logger.info("============ Updating ============");
-	streamDeck.logger.info(actions);
 	let universeMap: Map<number, (KeyAction | DialAction)[]> = new Map(); 
 	await Promise.all(actions.map(async (action: KeyAction | DialAction) => {
-		const settings: CountSettings = await action.getSettings();
+		const settings: CountSettings = getSettings(action.id)
 		const universe = await getUniverseFromPlace(settings.placeId || 0);
 		let actions = universeMap.get(universe) || [];
 		actions.push(action);
@@ -97,7 +95,7 @@ async function updateActions(actions: (KeyAction | DialAction)[]) {
 			let actions = universeMap.get(universeId) || [];
 			let generatedImages: Map<string, string> = new Map<string, string>();
 			await Promise.all(actions.map(async (action) => {
-				const settings: CountSettings = await action.getSettings();
+				const settings: CountSettings = getSettings(action.id);
 				const format: string = settings.format;
 				let image = generatedImages.get(format);
 				if (!image) {
@@ -115,45 +113,42 @@ async function updateActions(actions: (KeyAction | DialAction)[]) {
 				action.setImage("imgs/actions/player-count/icon");
 			});
 		}
-	}).then(() => {
-		actions.forEach((action) => {
-			updating.delete(action.id);
-		});
 	});
 }
 
-async function addTextToImage(base64: string, text: string) {
-	const fontSize = 200/Math.max(text.length, 5);
-	const svg = `
-		<svg width="144" height="144" viewBox="0 0 144 144" xmlns="http://www.w3.org/2000/svg">
-			<defs>
-				<filter id="dropShadow" x="-50%" y="-50%" width="200%" height="200%">
-					<feMorphology in="SourceAlpha" result="Thickened" operator="dilate" radius="3" />
-					<feGaussianBlur in="Thickened" stdDeviation="4" />
-					<feOffset dx="0" dy="0" result="offsetblur" />
-					<feFlood flood-color="black" flood-opacity="1" />
-					<feComposite in="offsetblur" operator="in" />
-					<feMerge>
-						<feMergeNode />
-						<feMergeNode in="SourceGraphic" />
-					</feMerge>
-				</filter>
-			</defs>
-			<text
-				x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}" fill="#fff" filter="url(#dropShadow)" style="font-family: 'Arial';" font-weight="700">${text}
-			</text>
-		</svg>
-	`;
-	const svgBuffer = Buffer.from(svg);
+async function addTextToImage(base64: string, text: string): Promise<string> {
 	const uri = base64.split(";base64,").pop() || "";
 	const buffer = Buffer.from(uri, 'base64');
-	const base = await sharp(buffer)
-	.resize(144, 144)
-	.modulate({ brightness: 0.75 })
-	.blur(2)
-	.composite([{ input: svgBuffer }])
-	.png().toBuffer();
-	return `data:image/png;base64,${base.toString('base64')}`;
+	let image = (await Jimp.read(buffer))
+	.resize({w: 144, h: 144})
+	.brightness(0.75);
+
+	// Font created using https://snowb.org/
+	let font = await loadFont("./fonts/BebasNeue-Regular.fnt");
+	let fontX = measureText(font, text);
+	let fontY = measureTextHeight(font, text, Infinity);
+	let ratioX = 120 / fontX;
+	let ratioY = 60 / fontY;
+	let scale = Math.min(ratioX, ratioY, 1);
+
+	let textImage = new Jimp({
+		height: fontY,
+		width: fontX,
+	})
+	.print({
+		x: 0,
+		y: 0,
+		text: {
+			text: text,
+		},
+		font: font,
+	})
+	.resize({w: fontX * scale, h: fontY * scale})
+
+	let x = (image.width - textImage.width) / 2;
+	let y = (image.height - textImage.height) / 2;
+
+	return image.composite(textImage, x, y).getBase64("image/jpeg");
 }
 
 async function getUniverseFromPlace(placeId: number): Promise<number> {
@@ -168,7 +163,6 @@ async function getUniverseFromPlace(placeId: number): Promise<number> {
 }
 
 async function getThumbnails(universeIds: number[]): Promise<Map<number, string>> {
-	streamDeck.logger.info(universeIds);
 	const thumbnails = new Map();
 	if (universeIds.length == 0) {
 		return thumbnails;
@@ -176,13 +170,9 @@ async function getThumbnails(universeIds: number[]): Promise<Map<number, string>
 	return fetch(`https://thumbnails.roblox.com/v1/games/icons?universeIds=${universeIds.join(',')}&returnPolicy=PlaceHolder&size=150x150&format=Png&isCircular=false`)
 	.then(async (response) => {
 		const requests = [];
-		streamDeck.logger.info(response.status);
-		streamDeck.logger.info(response.statusText);
 		if (response.status === 200) {
 			let json = await response.json() as ThumbnailResponse;
-			streamDeck.logger.info(json);
 			for (let thumbnailData of json.data) {
-				streamDeck.logger.info(thumbnailData.imageUrl);
 				requests.push(
 					fetch(thumbnailData.imageUrl)
 					.then(async (response) => {
@@ -207,7 +197,6 @@ async function getPlayerCounts(universeIds: number[]): Promise<Map<number, numbe
 	}
 	return fetch(`https://games.roblox.com/v1/games?universeIds=${universeIds}`)
 	.then(async (response) => {
-		streamDeck.logger.info(response.status);
 		if (response.status === 200) {
 			let json = await response.json() as UniverseDataResponse;
 			for (let universeData of json.data) {
@@ -222,14 +211,14 @@ async function getPlayerCounts(universeIds: number[]): Promise<Map<number, numbe
 export class PlayerCount extends SingletonAction<CountSettings> {
 
 	override async onWillAppear(ev: WillAppearEvent<CountSettings>): Promise<void> {
-		streamDeck.logger.info("============ WILL APPEAR ============", ev.action.id);
-		await registerAction(ev.action.id);
+		registerAction(ev.action.id);
+		cachedSettings.set(ev.action.id, ev.payload.settings);
 		await updateActions([ev.action]);
 	}
 
 	override async onWillDisappear(ev: WillDisappearEvent<CountSettings>): Promise<void> {
-		streamDeck.logger.info("============ WILL DISAPPEAR ============", ev.action.id);
-		await unregisterAction(ev.action.id);
+		unregisterAction(ev.action.id);
+		cachedSettings.delete(ev.action.id);
 	}
 
 	override onKeyDown(ev: KeyDownEvent<CountSettings>): void {
@@ -238,7 +227,7 @@ export class PlayerCount extends SingletonAction<CountSettings> {
 	}
 
 	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<CountSettings>): Promise<void> {
-		streamDeck.logger.info("============ RECEIVED SETTINGS ============", ev.action.id);
+		cachedSettings.set(ev.action.id, ev.payload.settings);
 		await updateActions([ev.action]);
 	}
 

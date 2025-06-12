@@ -44,7 +44,6 @@ const config = {
 			}
 		}
 	],
-	external: ["sharp"]
 };
 
 export default config;
