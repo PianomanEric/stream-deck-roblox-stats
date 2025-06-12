@@ -1,6 +1,6 @@
 {
 	"Name": "Roblox Stats",
-	"Version": "1.1.2.0",
+	"Version": "1.2.0.0",
 	"Author": "Eric Falk",
 	"Actions": [
 		{
@@ -12,12 +12,11 @@
 			"Controllers": [
 				"Keypad"
 			],
-			"UserTitleEnabled": false,
 			"SupportedInMultiActions": false,
 			"States": [
 				{
 					"Image": "imgs/actions/player-count/icon",
-					"TitleAlignment": "middle"
+					"TitleAlignment": "top"
 				}
 			]
 		}

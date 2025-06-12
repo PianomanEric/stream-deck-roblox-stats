@@ -1,5 +1,5 @@
-import { action, KeyAction, DialAction, DidReceiveSettingsEvent, KeyDownEvent, SingletonAction, streamDeck, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
-import { Jimp, loadFont, measureText, measureTextHeight } from "jimp";
+import { action, KeyAction, DialAction, DidReceiveSettingsEvent, KeyDownEvent, SingletonAction, streamDeck, WillAppearEvent, WillDisappearEvent, JsonValue, SendToPluginEvent } from "@elgato/streamdeck";
+import { BlendMode, Jimp, loadFont, measureText, measureTextHeight } from "jimp";
 
 const REFRESH_INTERVAL = 30000;
 
@@ -101,7 +101,7 @@ async function updateActions(actions: (KeyAction | DialAction)[]) {
 				if (!image) {
 					const num = counts.get(universeId) || 0
 					const numberString: string = (format == "full" ? num.toLocaleString() : shortenNumber(num));
-					image = await addTextToImage(thumbnails.get(universeId) || "", numberString);
+					image = await addTextToImage(thumbnails.get(universeId) || "", numberString, settings.font);
 					generatedImages.set(format, image);
 				}
 				action.setImage(image);
@@ -116,7 +116,7 @@ async function updateActions(actions: (KeyAction | DialAction)[]) {
 	});
 }
 
-async function addTextToImage(base64: string, text: string): Promise<string> {
+async function addTextToImage(base64: string, text: string, fontName: string = "Anton"): Promise<string> {
 	const uri = base64.split(";base64,").pop() || "";
 	const buffer = Buffer.from(uri, 'base64');
 	const image = (await Jimp.read(buffer))
@@ -127,7 +127,7 @@ async function addTextToImage(base64: string, text: string): Promise<string> {
 	}
 
 	// Font created using https://snowb.org/
-	let font = await loadFont("./fonts/BebasNeue-Regular.fnt");
+	let font = await loadFont(`./fonts/${fontName}/${fontName}.fnt`);
 	let fontX = measureText(font, text);
 	let fontY = measureTextHeight(font, text, Infinity);
 
@@ -149,8 +149,8 @@ async function addTextToImage(base64: string, text: string): Promise<string> {
 	let y = (image.height - textImage.height) / 2;
 
 	const shadowImage = new Jimp({
-		height: 144,
 		width: 144,
+		height: 144,
 	}).composite(textImage, x, y).brightness(0).blur(5).opacity(0.8);
 
 	image.composite(shadowImage.composite(shadowImage).composite(shadowImage)).composite(textImage, x, y);
@@ -238,9 +238,27 @@ export class PlayerCount extends SingletonAction<CountSettings> {
 		await updateActions([ev.action]);
 	}
 
+	override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, CountSettings>): Promise<void> {
+		streamDeck.logger.info(ev.payload);
+		streamDeck.ui.current?.sendToPropertyInspector({
+			event: "getFonts",
+			items: [
+				{
+					label: "Anton",
+					value: "Anton",
+				},
+				{
+					label: "BebasNeue",
+					value: "BebasNeue",
+				},
+			]
+		});
+	}
+
 }
 
 type CountSettings = {
 	placeId?: number;
-	format: "compact" | "full";
+	format: string;
+	font: string;
 };
