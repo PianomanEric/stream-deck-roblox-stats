@@ -1,5 +1,5 @@
 import { action, KeyAction, DialAction, DidReceiveSettingsEvent, KeyDownEvent, SingletonAction, streamDeck, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
-import { Jimp, loadFont, measureText, measureTextHeight} from "jimp";
+import { Jimp, loadFont, measureText, measureTextHeight } from "jimp";
 
 const REFRESH_INTERVAL = 30000;
 
@@ -119,21 +119,21 @@ async function updateActions(actions: (KeyAction | DialAction)[]) {
 async function addTextToImage(base64: string, text: string): Promise<string> {
 	const uri = base64.split(";base64,").pop() || "";
 	const buffer = Buffer.from(uri, 'base64');
-	let image = (await Jimp.read(buffer))
-	.resize({w: 144, h: 144})
-	.brightness(0.75);
+	const image = (await Jimp.read(buffer))
+	.resize({w: 144, h: 144}).brightness(0.75);
+
+	if (text == "") {
+		text = " "
+	}
 
 	// Font created using https://snowb.org/
 	let font = await loadFont("./fonts/BebasNeue-Regular.fnt");
 	let fontX = measureText(font, text);
 	let fontY = measureTextHeight(font, text, Infinity);
-	let ratioX = 120 / fontX;
-	let ratioY = 60 / fontY;
-	let scale = Math.min(ratioX, ratioY, 1);
 
-	let textImage = new Jimp({
-		height: fontY,
+	const textImage = new Jimp({
 		width: fontX,
+		height: fontY,
 	})
 	.print({
 		x: 0,
@@ -143,12 +143,19 @@ async function addTextToImage(base64: string, text: string): Promise<string> {
 		},
 		font: font,
 	})
-	.resize({w: fontX * scale, h: fontY * scale})
+	.scaleToFit({w: 120, h: 60});
 
 	let x = (image.width - textImage.width) / 2;
 	let y = (image.height - textImage.height) / 2;
 
-	return image.composite(textImage, x, y).getBase64("image/jpeg");
+	const shadowImage = new Jimp({
+		height: 144,
+		width: 144,
+	}).composite(textImage, x, y).brightness(0).blur(5).opacity(0.8);
+
+	image.composite(shadowImage.composite(shadowImage).composite(shadowImage)).composite(textImage, x, y);
+
+	return image.getBase64("image/jpeg");
 }
 
 async function getUniverseFromPlace(placeId: number): Promise<number> {
