@@ -1,5 +1,6 @@
 import { action, KeyAction, DialAction, DidReceiveSettingsEvent, KeyDownEvent, SingletonAction, streamDeck, WillAppearEvent, WillDisappearEvent, JsonValue, SendToPluginEvent } from "@elgato/streamdeck";
-import { BlendMode, Jimp, loadFont, measureText, measureTextHeight } from "jimp";
+import { Jimp, loadFont, measureText, measureTextHeight } from "jimp";
+import fs from "fs";
 
 const REFRESH_INTERVAL = 30000;
 
@@ -27,6 +28,24 @@ interface UniverseDataResponse {
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let activeActions: Set<string> = new Set<string>();
+
+let fonts: JsonValue[] | undefined = undefined;
+
+async function getFonts(): Promise<JsonValue[]> {
+	if (!fonts) {
+		fonts = [];
+		const dir = await fs.promises.opendir("./fonts");
+		for await (const entry of dir) {
+			const fontName = entry.name.replaceAll("_", " ");
+			fonts.push({
+				label: fontName,
+				value: entry.name,
+			});
+		}
+	}
+
+	return fonts;
+}
 
 function shortenNumber(num: number = 0) {
 	if (num < 1000) {
@@ -96,13 +115,13 @@ async function updateActions(actions: (KeyAction | DialAction)[]) {
 			let generatedImages: Map<string, string> = new Map<string, string>();
 			await Promise.all(actions.map(async (action) => {
 				const settings: CountSettings = getSettings(action.id);
-				const format: string = settings.format;
-				let image = generatedImages.get(format);
+				const settingsHash = JSON.stringify(settings);
+				let image = generatedImages.get(settingsHash);
 				if (!image) {
 					const num = counts.get(universeId) || 0
-					const numberString: string = (format == "full" ? num.toLocaleString() : shortenNumber(num));
+					const numberString: string = (settings.format == "full" ? num.toLocaleString() : shortenNumber(num));
 					image = await addTextToImage(thumbnails.get(universeId) || "", numberString, settings.font);
-					generatedImages.set(format, image);
+					generatedImages.set(settingsHash, image);
 				}
 				action.setImage(image);
 			}));
@@ -117,6 +136,7 @@ async function updateActions(actions: (KeyAction | DialAction)[]) {
 }
 
 async function addTextToImage(base64: string, text: string, fontName: string = "Anton"): Promise<string> {
+	const fontFileName = fontName.replaceAll(" ", "_")
 	const uri = base64.split(";base64,").pop() || "";
 	const buffer = Buffer.from(uri, 'base64');
 	const image = (await Jimp.read(buffer))
@@ -127,23 +147,29 @@ async function addTextToImage(base64: string, text: string, fontName: string = "
 	}
 
 	// Font created using https://snowb.org/
-	let font = await loadFont(`./fonts/${fontName}/${fontName}.fnt`);
-	let fontX = measureText(font, text);
-	let fontY = measureTextHeight(font, text, Infinity);
+	let font = await loadFont(`./fonts/${fontFileName}/${fontFileName}.fnt`);
+	let fontX = Math.floor(measureText(font, text) * 1.5);
+	let fontY = Math.floor(measureTextHeight(font, text, Infinity) * 1.5);
 
 	const textImage = new Jimp({
-		width: fontX,
-		height: fontY,
+		width: fontX + 20,
+		height: fontY + 20,
 	})
 	.print({
-		x: 0,
-		y: 0,
+		x: 20,
+		y: 20,
 		text: {
 			text: text,
 		},
 		font: font,
 	})
-	.scaleToFit({w: 120, h: 60});
+	.autocrop({
+
+	})
+	.scaleToFit({w: 110, h: 48});
+
+	fontX = textImage.width;
+	fontY = textImage.height;
 
 	let x = (image.width - textImage.width) / 2;
 	let y = (image.height - textImage.height) / 2;
@@ -240,18 +266,12 @@ export class PlayerCount extends SingletonAction<CountSettings> {
 
 	override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, CountSettings>): Promise<void> {
 		streamDeck.logger.info(ev.payload);
+
+		const fonts = await getFonts();
+
 		streamDeck.ui.current?.sendToPropertyInspector({
 			event: "getFonts",
-			items: [
-				{
-					label: "Anton",
-					value: "Anton",
-				},
-				{
-					label: "BebasNeue",
-					value: "BebasNeue",
-				},
-			]
+			items: fonts
 		});
 	}
 
